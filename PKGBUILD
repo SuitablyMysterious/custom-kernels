@@ -119,7 +119,7 @@
 # Builds the open nvidia module and package it into a own base
 # This does replace the requirement of nvidia-open-dkms
 # Use this only if you have Turing+ GPU
-: "${_build_nvidia_open:=yes}"
+: "${_build_nvidia_open:=no}"
 
 # Builds the r8125 module and package it into its own package
 # Replaces requirement for r8125-dkms
