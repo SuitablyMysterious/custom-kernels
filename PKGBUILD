@@ -9,7 +9,7 @@
 # Set these variables to ANYTHING that is not null or choose proper variable to enable them
 
 ### Selecting CachyOS config
-: "${_cachy_config:=yes}"
+: "${_cachy_config:=no}"
 
 ### Selecting the CPU scheduler
 # ATTENTION - only one of the following values can be selected:
@@ -816,5 +816,5 @@ done
 
 b2sums=('652178167b7d164d8b503fea25d68be3b4c24d28fcec6454656303132ef2f21e38f5e5b7af5d286c619344577bc6227389f4bd750a0e882ce7352ca7adb4f4ac'
         'SKIP'
-        '67ed61561bb0a69d33eed41d2c74ad6205aed2e74486138f9a906e5441e179752a5d2d2035bb847e9cbb6b4a9242b65445ffedbecc0719ada5fa280a9495add9'
+        'b90ee4e6c48ccc8c9cd86239d17ec32294a4429ecb05390c1e28b08cb22892b6a87f074aae2d680e7b21c2a30e7dd8353557d807a6de56bc684dc7fd0288a134'
         'c992567bd7dd8553432be496ffa1c17e2f5ebe9c7edb51945cf977e1b742dd6517c210d8843bb82744ca705efd07f8027cd7dde41b50215ebd707a34aa81462e')
