@@ -9,7 +9,7 @@
 # Set these variables to ANYTHING that is not null or choose proper variable to enable them
 
 ### Selecting CachyOS config
-: "${_cachy_config:=no}"
+: "${_cachy_config:=yes}"
 
 ### Selecting the CPU scheduler
 # ATTENTION - only one of the following values can be selected:
@@ -119,7 +119,7 @@
 # Builds the open nvidia module and package it into a own base
 # This does replace the requirement of nvidia-open-dkms
 # Use this only if you have Turing+ GPU
-: "${_build_nvidia_open:=no}"
+: "${_build_nvidia_open:=yes}"
 
 # Builds the r8125 module and package it into its own package
 # Replaces requirement for r8125-dkms
@@ -136,7 +136,7 @@
 # 3. Profile the kernel and convert the profile, see Generating the Profile for AutoFDO
 # 4. Put the profile into the sourcedir
 # 5. Run kernel build again with the _autofdo_profile_name path to profile specified
-: "${_autofdo:=no}"
+: "${_autofdo:=yes}"
 
 # Name for the AutoFDO profile
 : "${_autofdo_profile_name:=}"
@@ -817,4 +817,5 @@ done
 b2sums=('652178167b7d164d8b503fea25d68be3b4c24d28fcec6454656303132ef2f21e38f5e5b7af5d286c619344577bc6227389f4bd750a0e882ce7352ca7adb4f4ac'
         'SKIP'
         'b90ee4e6c48ccc8c9cd86239d17ec32294a4429ecb05390c1e28b08cb22892b6a87f074aae2d680e7b21c2a30e7dd8353557d807a6de56bc684dc7fd0288a134'
-        'c992567bd7dd8553432be496ffa1c17e2f5ebe9c7edb51945cf977e1b742dd6517c210d8843bb82744ca705efd07f8027cd7dde41b50215ebd707a34aa81462e')
+        'c992567bd7dd8553432be496ffa1c17e2f5ebe9c7edb51945cf977e1b742dd6517c210d8843bb82744ca705efd07f8027cd7dde41b50215ebd707a34aa81462e'
+        'e87b46ff8f33cbe1262cd230012d0f2694194a7c16824a671817d212e1b93c8b3a31d35db75f9b0399693c1f2b6030b99f2f0af70d9c83c3ab9cd1c24e7d90f8')
