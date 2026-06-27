@@ -3,3 +3,9 @@ pkg
 src
 *-cachyos-custom
 *-cachyos
+*.old
+vmlinux-backups/
+profiles/autofdo/*.data
+profiles/propeller/*.data
+profiles/bolt/*.data
+profiles/bolt/*.7z
