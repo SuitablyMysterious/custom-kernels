@@ -6,6 +6,8 @@ src
 *.old
 vmlinux-backups/
 profiles/autofdo/*.data
+profiles/autofdo/*.afdo
 profiles/propeller/*.data
 profiles/bolt/*.data
 profiles/bolt/*.7z
+profiles/machines/*/raw/
