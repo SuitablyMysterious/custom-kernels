@@ -1,0 +1,65 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - PKGBUILD
+      - config
+      - profiles/machines/**
+      - patches/**
+
+env:
+  BOLT_BIN: toolchain/llvm-bolt
+
+jobs:
+  build:
+    name: ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86-64-v3
+            proc: generic_v3
+
+    container:
+      image: archlinux/archlinux:base-devel
+      options: --privileged
+
+    steps:
+      - name: Install deps
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed bc binutils cpio gettext glibc libelf libgcc openssl pahole perl python rust rust-bindgen rust-src tar xxhash xz zlib zstd clang llvm lld git sudo
+
+      - name: Create build user
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+
+      - name: Hand workspace to builder
+        run: chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build
+        run: |
+          bolt="$GITHUB_WORKSPACE/$BOLT_BIN"
+          [ -f "$bolt" ] && chmod +x "$bolt" || echo "WARNING: $bolt missing, BOLT step will fail"
+          sudo -u builder env \
+            BOLT="$bolt" \
+            _march=${{ matrix.arch }} \
+            _localmodcfg=no \
+            _processor_opt=${{ matrix.proc }} \
+            SOURCE_DATE_EPOCH=0 \
+            makepkg -s --noconfirm --skippgpcheck --skipchecksums
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ matrix.arch }}
+          path: '*.pkg.tar.zst'
+          retention-days: 30
