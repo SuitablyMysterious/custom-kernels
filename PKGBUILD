@@ -1,9 +1,5 @@
-# Maintainer: Peter Jung ptr1337 <admin@ptr1337.dev>
-# Maintainer: Piotr Gorski <piotrgorski@cachyos.org>
-# Maintainer: Vasiliy Stelmachenok <ventureo@cachyos.org>
-# Contributor: Jan Alexander Steffens (heftig) <jan.steffens@gmail.com>
-# Contributor: Tobias Powalowski <tpowa@archlinux.org>
-# Contributor: Thomas Baechler <thomas@archlinux.org>
+# Based off of https://github.com/CachyOS/linux-cachyos/blob/master/linux-cachyos/PKGBUILD
+# Maintained by SuitablyMysterious
 
 ### BUILD OPTIONS
 # Set these variables to ANYTHING that is not null or choose proper variable to enable them
@@ -126,7 +122,7 @@
 : "${_build_r8125:=no}"
 
 # Build a debug package with non-stripped vmlinux
-: "${_build_debug:=no}"
+: "${_build_debug:=yes}"
 
 # Enable AUTOFDO_CLANG for the first compilation to create a kernel, which can be used for profiling
 # Workflow:
@@ -139,7 +135,7 @@
 : "${_autofdo:=yes}"
 
 # Name for the AutoFDO profile
-: "${_autofdo_profile_name:=}"
+: "${_autofdo_profile_name:=kernel.afdo}"
 
 # Propeller should be applied, after the kernel is optimized with AutoFDO
 # Workflow:
@@ -149,10 +145,22 @@
 # create_llvm_prof --binary=/usr/src/debug/linux-cachyos-rc/vmlinux --profile=propeller.data --format=propeller --propeller_output_module_name --out=propeller_cc_profile.txt --propeller_symorder=propeller_ld_profile.txt
 # 4. Place the propeller_cc_profile.txt and propeller_ld_profile.txt into the srcdir
 # 5. Enable _propeller_prefix
-: "${_propeller:=no}"
+: "${_propeller:=yes}"
 
 # Enable this after the profiles have been generated
-: "${_propeller_profiles:=no}"
+: "${_propeller_profiles:=yes}"
+
+# BOLT stuff
+# 
+# Enable this for the final build
+: "${_bolt:=yes}"
+
+# Path of the perf2bolt generated .fdata file
+: "${_bolt_profile_name:=perf_overall.fdata}"
+
+# This will add the relavent kernel sections in order to record performance
+# Do not enable this when _bolt=yes
+: "${_bolt_prep:=no}"
 
 # ATTENTION: Do not modify after this line
 _is_lto_kernel() {
@@ -165,8 +173,12 @@ _is_ci_build() {
     return $?
 }
 
+_die() { error "$@" ; exit 1; }
 
-_pkgsuffix=cachyos-custom
+# Which profiles/machines/<dir> to pull the AutoFDO/Propeller/BOLT profiles from
+: "${_march:=x86-64-v3}"
+
+_pkgsuffix=archbishop
 
 
 pkgbase="linux-$_pkgsuffix"
@@ -248,19 +260,27 @@ if [ "$_build_nvidia_open" = "yes" ]; then
     source+=("https://download.nvidia.com/XFree86/${_nv_open_pkg%"-$_nv_ver"}/${_nv_open_pkg}.tar.xz")
 fi
 
-# Use generated AutoFDO Profile
+# Local profiles and the BOLT patches are NOT added to the source array:
+# makepkg only handles local files sitting next to the PKGBUILD, and these live
+# in profiles/machines/<arch>/ and patches/. prepare() copies/applies them from
+# $startdir instead. We just validate they exist here so we fail early.
+_profiledir="profiles/machines/${_march}"
+
 if [ "$_autofdo" = "yes" ] && [ -n "$_autofdo_profile_name" ]; then
-    if [ -e "$_autofdo_profile_name" ]; then
-        source+=("$_autofdo_profile_name")
-    else
-        _die "Failed to find file ${_autofdo_profile_name}"
-    fi
+    [ -e "${_profiledir}/${_autofdo_profile_name}" ] \
+        || _die "Failed to find file ${_profiledir}/${_autofdo_profile_name}"
 fi
 
-# Use generated Propeller Profile
 if [ "$_propeller" = "yes" ] && [ "$_propeller_profiles" = "yes" ]; then
-    source+=(propeller_cc_profile.txt
-             propeller_ld_profile.txt)
+    for _f in propeller_cc_profile.txt propeller_ld_profile.txt; do
+        [ -e "${_profiledir}/${_f}" ] \
+            || _die "Failed to find file ${_profiledir}/${_f}"
+    done
+fi
+
+if [ "$_bolt" = "yes" ] && [ -n "$_bolt_profile_name" ]; then
+    [ -e "${_profiledir}/${_bolt_profile_name}" ] \
+        || _die "Failed to find BOLT profile ${_profiledir}/${_bolt_profile_name}"
 fi
 
 if [ "$_build_r8125" = "yes" ]; then
@@ -283,14 +303,23 @@ export KBUILD_BUILD_HOST=cachyos
 export KBUILD_BUILD_USER="$pkgbase"
 export KBUILD_BUILD_TIMESTAMP="$(date -Ru${SOURCE_DATE_EPOCH:+d @$SOURCE_DATE_EPOCH})"
 
-_die() { error "$@" ; exit 1; }
-
 prepare() {
     cd "$_srcname"
 
     echo "Setting version..."
     echo "-$pkgrel" > localversion.10-pkgrel
     echo "${pkgbase#linux}" > localversion.20-pkgname
+
+    if [ "$_autofdo" = "yes" ] && [ -n "$_autofdo_profile_name" ]; then
+        cp --remove-destination "${startdir}/${_profiledir}/${_autofdo_profile_name}" "${srcdir}/${_autofdo_profile_name}"
+    fi
+    if [ "$_propeller" = "yes" ] && [ "$_propeller_profiles" = "yes" ]; then
+        cp --remove-destination "${startdir}/${_profiledir}/propeller_cc_profile.txt" "${srcdir}/propeller_cc_profile.txt"
+        cp --remove-destination "${startdir}/${_profiledir}/propeller_ld_profile.txt" "${srcdir}/propeller_ld_profile.txt"
+    fi
+    if [ "$_bolt" = "yes" ] && [ -n "$_bolt_profile_name" ]; then
+        cp --remove-destination "${startdir}/${_profiledir}/${_bolt_profile_name}" "${srcdir}/${_bolt_profile_name}"
+    fi
 
     local src
     for patch in "${source[@]}"; do
@@ -305,6 +334,15 @@ prepare() {
             patch -Np1 < "../$src"
         fi
     done
+
+    if [ "$_bolt" = "yes" ] || [ "$_bolt_prep" = "yes" ]; then
+        echo "Applying patch vmlinux-bolt-reserve.patch..."
+        patch -Np1 < "${startdir}/patches/vmlinux-bolt-reserve.patch"
+    fi
+    if [ "$_bolt" = "yes" ]; then
+        echo "Applying patch link-vmlinux-bolt.patch..."
+        patch -Np1 < "${startdir}/patches/link-vmlinux-bolt.patch"
+    fi
 
     echo "Setting config..."
     cp ../config .config
@@ -323,6 +361,12 @@ prepare() {
         scripts/config -d GENERIC_CPU -d MZEN4 -e X86_NATIVE_CPU
     fi
 
+	if [ "$_bolt" = "yes" ] && [ -n "$_bolt_profile_name" ]; then
+	    echo "Placing BOLT profile..."
+	    cp "${srcdir}/${_bolt_profile_name}" "${srcdir}/${_srcname}/perf.fdata"
+	fi
+
+	
     ### Selecting CachyOS config
     if [ "$_cachy_config" = "yes" ]; then
         echo "Enabling CachyOS config..."
@@ -727,8 +771,8 @@ _package-headers() {
         esac
     done < <(find "$builddir" -type f -perm -u+x ! -name vmlinux -print0)
 
-    echo "Stripping vmlinux..."
-    strip -v $STRIP_STATIC "$builddir/vmlinux"
+    #echo "Stripping vmlinux..."
+    #strip -v $STRIP_STATIC "$builddir/vmlinux"
 
     echo "Adding symlink..."
     mkdir -p "$pkgdir/usr/src"
@@ -816,6 +860,5 @@ done
 
 b2sums=('652178167b7d164d8b503fea25d68be3b4c24d28fcec6454656303132ef2f21e38f5e5b7af5d286c619344577bc6227389f4bd750a0e882ce7352ca7adb4f4ac'
         'SKIP'
-        'b90ee4e6c48ccc8c9cd86239d17ec32294a4429ecb05390c1e28b08cb22892b6a87f074aae2d680e7b21c2a30e7dd8353557d807a6de56bc684dc7fd0288a134'
-        'c992567bd7dd8553432be496ffa1c17e2f5ebe9c7edb51945cf977e1b742dd6517c210d8843bb82744ca705efd07f8027cd7dde41b50215ebd707a34aa81462e'
-        'e87b46ff8f33cbe1262cd230012d0f2694194a7c16824a671817d212e1b93c8b3a31d35db75f9b0399693c1f2b6030b99f2f0af70d9c83c3ab9cd1c24e7d90f8')
+        'f106419e5360b97d937fd9c5aaa35b9661c6fc6dbf1a336b235a451ec9b6fc64644109380f887a19003602b1009108bcda993f667621661e0d230c3d52ddb4eb'
+        'c992567bd7dd8553432be496ffa1c17e2f5ebe9c7edb51945cf977e1b742dd6517c210d8843bb82744ca705efd07f8027cd7dde41b50215ebd707a34aa81462e')
