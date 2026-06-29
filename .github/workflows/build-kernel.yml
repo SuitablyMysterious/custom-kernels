@@ -57,6 +57,13 @@ jobs:
           mkdir -p /home/builder/srcdest
           chown -R builder:builder /home/builder/srcdest
 
+      - name: Cache build tree
+        uses: actions/cache@v4
+        with:
+          path: src
+          key: buildtree-${{ matrix.arch }}-${{ hashFiles('PKGBUILD', 'config') }}
+          restore-keys: buildtree-${{ matrix.arch }}-
+
       - name: Build
         run: |
           bolt="$GITHUB_WORKSPACE/$BOLT_BIN"
@@ -71,7 +78,7 @@ jobs:
             makepkg -s --noconfirm --skippgpcheck --skipchecksums
 
       - name: Upload packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: kernel-${{ matrix.arch }}
           path: '*.pkg.tar.zst'
